@@ -1,0 +1,10 @@
+artifact_location: file:///C:/Users/SRI/Documents/MTech/Sem3/MLOps/Assignment2/iris-classification-project/mlruns/966465427604629840/models/m-9488e437b87246f88f41e1c627f43629/artifacts
+creation_timestamp: 1753703498429
+experiment_id: '966465427604629840'
+last_updated_timestamp: 1753703504415
+model_id: m-9488e437b87246f88f41e1c627f43629
+model_type: null
+name: logistic_regression
+source_run_id: 5f2b8714192a4173ba3de51015f75c03
+status: 2
+status_message: null

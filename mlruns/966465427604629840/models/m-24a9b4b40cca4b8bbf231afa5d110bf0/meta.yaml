@@ -1,0 +1,10 @@
+artifact_location: file:///C:/Users/SRI/Documents/MTech/Sem3/MLOps/Assignment2/iris-classification-project/mlruns/966465427604629840/models/m-24a9b4b40cca4b8bbf231afa5d110bf0/artifacts
+creation_timestamp: 1753701326501
+experiment_id: '966465427604629840'
+last_updated_timestamp: 1753701331406
+model_id: m-24a9b4b40cca4b8bbf231afa5d110bf0
+model_type: null
+name: model
+source_run_id: affbf43639e6459da471dad1c6d4e9f4
+status: 2
+status_message: null

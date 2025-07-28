@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/SRI/Documents/MTech/Sem3/MLOps/Assignment2/iris-classification-project/mlruns/966465427604629840/a1dc8f496d95463eb68d17d2c3086116/artifacts
+end_time: 1753703509325
+entry_point_name: ''
+experiment_id: '966465427604629840'
+lifecycle_stage: active
+run_id: a1dc8f496d95463eb68d17d2c3086116
+run_name: Random_Forest
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1753703504449
+status: 3
+tags: []
+user_id: SRI

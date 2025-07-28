@@ -32,3 +32,13 @@ git add models/.gitignore models/iris_rf_model.joblib.dvc
 # Commit everything to Git
 git add .
 git commit -m "Initial implementation with Iris dataset"
+
+###################
+### Part 2  ###
+###################
+
+# Process data first
+python src/data_preparation.py
+
+# Then train models
+python src/model_training.py

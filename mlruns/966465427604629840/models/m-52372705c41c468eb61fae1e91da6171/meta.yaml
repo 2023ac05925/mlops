@@ -1,0 +1,10 @@
+artifact_location: file:///C:/Users/SRI/Documents/MTech/Sem3/MLOps/Assignment2/iris-classification-project/mlruns/966465427604629840/models/m-52372705c41c468eb61fae1e91da6171/artifacts
+creation_timestamp: 1753703147431
+experiment_id: '966465427604629840'
+last_updated_timestamp: 1753703152398
+model_id: m-52372705c41c468eb61fae1e91da6171
+model_type: null
+name: random_forest
+source_run_id: 32e2db2e240b4dab862f91b9b327782a
+status: 2
+status_message: null

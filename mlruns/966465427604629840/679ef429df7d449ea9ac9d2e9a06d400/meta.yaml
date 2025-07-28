@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/SRI/Documents/MTech/Sem3/MLOps/Assignment2/iris-classification-project/mlruns/966465427604629840/679ef429df7d449ea9ac9d2e9a06d400/artifacts
+end_time: 1753701326232
+entry_point_name: ''
+experiment_id: '966465427604629840'
+lifecycle_stage: active
+run_id: 679ef429df7d449ea9ac9d2e9a06d400
+run_name: Logistic_Regression
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1753701315239
+status: 3
+tags: []
+user_id: SRI
