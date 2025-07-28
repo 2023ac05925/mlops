@@ -42,3 +42,43 @@ python src/data_preparation.py
 
 # Then train models
 python src/model_training.py
+
+# open Mlflow Ui
+Mlflow ui
+
+##################
+ ### Part 3 #####
+###################
+## 1. Build the Docker image:
+docker build -t iris-api .
+
+
+## 2. Run the container (make sure MLflow is running):
+docker run -p 5001:5001 iris-api
+# or
+docker run -p 5001:5001 --add-host=host.docker.internal:host-gateway iris-api
+
+## 3. tets API
+$body = @{
+    data = @(
+        @{sepal_length=5.1; sepal_width=3.5; petal_length=1.4; petal_width=0.2},
+        @{sepal_length=6.7; sepal_width=3.0; petal_length=5.2; petal_width=2.3}
+    )
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Uri "http://localhost:5001/predict" -Method POST -ContentType "application/json" -Body $body
+
+
+# Stop all running containers
+docker stop $(docker ps -q)
+# or list all containers 
+docker ps -a
+# Stop it using either
+docker stop <container_id_or_name>
+# or force remove if needed
+docker rm -f <container_id_or_name>
+
+# Find the process ID
+$pid = (Get-NetTCPConnection -LocalPort 5001).OwningProcess
+# Stop the process
+Stop-Process -Id $pid -Force
