@@ -1,0 +1,91 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "**" ]  # Triggers on all branches (adjust if needed)
+  pull_request:
+    branches: [ "main" ]  # Triggers on PRs to main
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # Updated to latest version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4  # Updated to v4
+        with:
+          node-version: '20'  # Updated to LTS version (or keep '18' if required)
+
+      - name: Install dependencies
+        run: npm ci  # Uses `npm ci` for reproducible builds (faster than `npm install`)
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm run test
+
+  build-and-push:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'  # Only run on main branch
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3  # Updated to v3
+        with:
+          username: 2023ac05925
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5  # Updated to v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:${{ github.sha }}  # Adds commit SHA as tag
+
+  
+
+
+
+
+deploy:
+  needs: build-and-push
+  runs-on: ubuntu-latest
+  if: github.ref == 'refs/heads/main'
+
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Start LocalStack (if not already running)
+      run: |
+        docker network create localstack || true
+        docker run -d --name localstack \
+          --network localstack \
+          -p 4566:4566 \
+          -e SERVICES=ec2,s3,lambda  # Add required AWS services
+          localstack/localstack
+
+    - name: Configure AWS CLI for LocalStack
+      run: |
+        aws configure set aws_access_key_id test
+        aws configure set aws_secret_access_key test
+        aws configure set default.region us-east-1
+        aws configure set endpoint_url http://localhost:4566
+
+    - name: Deploy to LocalStack (Example: Create S3 Bucket)
+      run: |
+        aws --endpoint-url=http://localhost:4566 s3 mb s3://my-test-bucket
+
+    - name: Run Dockerized App (Connects to LocalStack)
+      run: |
+        docker run -d --name my-app \
+          --network localstack \  # Share network with LocalStack
+          -e AWS_ENDPOINT=http://localstack:4566 \  # LocalStack internal DNS
+          -p 5001:5001 \
+          ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:latest

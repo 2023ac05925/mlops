@@ -8,7 +8,7 @@ python src/data_processing.py
 python -m pip show dvc | findstr "Location"
 ## if location return 
 Location: C:\Users\SRI\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages
-## then add this toenvirinment variable
+## then add this to envirinment variable
 $env:Path += ";C:\Users\SRI\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts"
 
 ## initialise dvc
@@ -45,6 +45,7 @@ python src/model_training.py
 
 # open Mlflow Ui
 Mlflow ui
+## if  above comman does not works  use : python -m mlflow ui
 
 ##################
  ### Part 3 #####
@@ -55,7 +56,7 @@ docker build -t iris-api .
 
 ## 2. Run the container (make sure MLflow is running):
 docker run -p 5001:5001 iris-api
-# or
+## or
 docker run -p 5001:5001 --add-host=host.docker.internal:host-gateway iris-api
 
 ## 3. tets API
@@ -82,3 +83,43 @@ docker rm -f <container_id_or_name>
 $pid = (Get-NetTCPConnection -LocalPort 5001).OwningProcess
 # Stop the process
 Stop-Process -Id $pid -Force
+
+###########################
+### Part 4 #########
+########################
+
+To generate your SSH key pair:
+ssh-keygen -t rsa -b 4096 -C "2023ac05925@wilp.bits-pilani.ac.in"
+
+## run LocalStack container
+
+## Login to docker
+Docker login
+## after succesful login run below command
+docker run -d -p 4566:4566 -p 4571:4571 localstack/localstack
+
+## above command will start LocalStack and expose AWS services locally.
+## LocalStack will emulate AWS services on your local machine.
+## Use AWS CLI or SDKs with endpoint http://localhost:4566 to interact with LocalStack.
+
+
+## to check aws is installed
+AWS -- version 
+
+aws config
+## You will be prompted for:
+## AWS Access Key ID: (for LocalStack, you can use any value: test
+## AWS Secret Access Key: (for LocalStack, you can use any value: test
+## Default region name: us-east-1
+## Default output format: json
+
+## For every AWS CLI command, add the --endpoint-url flag:
+aws s3 ls --endpoint-url=http://localhost:4566
+
+## To use LocalStack, always add --endpoint-url=http://localhost:4566 to your AWS CLI commands.
+## To test, try creating a bucket in LocalStack:
+aws s3 mb s3://mybucket --endpoint-url=http://localhost:4566
+## show all S3 buckets you have created in LocalStack running on your machine.
+aws s3 ls --endpoint-url=http://localhost:4566
+
+## using LocalStack, you do not need to set SSH_KNOWN_HOSTS or EC2_IP for your local development and CI/CD with LocalStack.
