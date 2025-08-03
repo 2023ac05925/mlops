@@ -61,10 +61,8 @@ jobs:
       - name: Start LocalStack (if not already running)
         run: |
           docker network create localstack || true
-          docker run -d --name localstack \
-            --network localstack \
-            -p 4566:4566 \
-            -e SERVICES=ec2,s3,lambda  # Add required AWS services
+          docker run -d --name localstack_main --network localstack -p 4566:4566
+            -e SERVICES=ec2,s3,lambda
             localstack/localstack
 
       - name: Configure AWS CLI for LocalStack
