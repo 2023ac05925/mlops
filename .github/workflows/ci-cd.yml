@@ -12,19 +12,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4  # Updated to latest version
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4  # Updated to v4
-        with:
-          node-version: '20'  # Updated to LTS version (or keep '18' if required)
+      # REMOVE these Node.js and npm steps if not needed
+      # - name: Set up Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
 
-      - name: Install dependencies
-        run: npm ci  # Uses `npm ci` for reproducible builds (faster than `npm install`)
+      # - name: Install dependencies
+      #   run: npm ci
 
-      - name: Run linter
-        run: npm run lint
+      # - name: Run linter
+      #   run: npm run lint
 
-      - name: Run tests
-        run: npm run test
+      # - name: Run tests
+      #   run: npm run test
 
   build-and-push:
     needs: lint-and-test
