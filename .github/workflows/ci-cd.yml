@@ -47,8 +47,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:latest
-            ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:${{ github.sha }}  # Adds commit SHA as tag
+            2023ac05925/iris-api:latest
+            2023ac05925/iris-api:${{ github.sha }} # Adds commit SHA as tag
 
   deploy:
     needs: build-and-push
