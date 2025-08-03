@@ -76,8 +76,4 @@ jobs:
 
       - name: Run Dockerized App (Connects to LocalStack)
         run: |
-          docker run -d --name my-app \
-            --network localstack \  # Share network with LocalStack
-            -e AWS_ENDPOINT=http://localstack:4566 \  # LocalStack internal DNS
-            -p 5001:5001 \
-            ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:latest
+          docker run -d --name my-app --network localstack -e AWS_ENDPOINT=http://localstack:4566 -p 5001:5001 ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:latest
