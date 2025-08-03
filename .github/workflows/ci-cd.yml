@@ -78,9 +78,9 @@ deploy:
         aws configure set default.region us-east-1
         aws configure set endpoint_url http://localhost:4566
 
-    - name: Deploy to LocalStack (Example: Create S3 Bucket)
+    - name: Deploy to LocalStack
       run: |
-        aws --endpoint-url=http://localhost:4566 s3 mb s3://my-test-bucket
+        aws s3 mb s3://mybucket --endpoint-url=http://localhost:4566
 
     - name: Run Dockerized App (Connects to LocalStack)
       run: |
