@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "**" ]  # Triggers on all branches (adjust if needed)
   pull_request:
-    branches: [ "main" ]  # Triggers on PRs to main
+    branches: [ "phase1" ]  # Triggers on PRs to phase1
 
 jobs:
   lint-and-test:
@@ -30,7 +30,7 @@ jobs:
   build-and-push:
     needs: lint-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'  # Only run on main branch
+    if: github.ref == 'refs/heads/phase1'  # Only run on phase1 branch
 
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/phase1'
 
     steps:
       - uses: actions/checkout@v4
