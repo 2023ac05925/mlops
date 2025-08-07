@@ -24,3 +24,5 @@ venv/
 # prometheus/LICENSE
 prometheus/LICENSE
 prometheus/data
+prometheus/prometheus.exe
+prometheus/promtool.exe
