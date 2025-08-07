@@ -5,6 +5,9 @@ import os
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Annotated
 import numpy as np
+import logging
+import sqlite3
+from datetime import datetime
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -36,6 +39,21 @@ class IrisFeatures(BaseModel):
 class PredictionRequest(BaseModel):
     data: List[IrisFeatures] = Field(..., min_length=1)
 
+
+# Set up logging to file
+logging.basicConfig(filename='prediction.log', level=logging.INFO, format='%(asctime)s %(message)s')
+
+# Helper: Log to SQLite
+def log_to_db(input_data, prediction):
+    conn = sqlite3.connect('logs.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS logs
+                 (timestamp TEXT, input TEXT, prediction TEXT)''')
+    c.execute("INSERT INTO logs VALUES (?, ?, ?)", (datetime.now().isoformat(), str(input_data), str(prediction)))
+    conn.commit()
+    conn.close()
+
+
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
@@ -60,10 +78,17 @@ def predict():
         # Make prediction
         predictions = model.predict(input_data).tolist()
         class_names = ['setosa', 'versicolor', 'virginica']
-        
+        predicted_classes = [class_names[p] for p in predictions]
+
+        # Log to file
+        logging.info(f"Input: {input_data.to_dict(orient='records')} | Predictions: {predictions} | Class names: {predicted_classes}")
+
+        # Log to SQLite
+        log_to_db(input_data.to_dict(orient='records'), {'predictions': predictions, 'class_names': predicted_classes})
+
         return jsonify({
             'predictions': predictions,
-            'class_names': [class_names[p] for p in predictions],
+            'class_names': predicted_classes,
             'status': 'success'
         })
     
@@ -77,5 +102,15 @@ def predict():
 def health():
     return jsonify({'status': 'healthy'})
 
+# Optional: /metrics endpoint
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    conn = sqlite3.connect('logs.db')
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM logs")
+    count = c.fetchone()[0]
+    conn.close()
+    return jsonify({'total_predictions': count})
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='127.0.0.1', port=5001)

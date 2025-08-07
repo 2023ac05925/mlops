@@ -69,6 +69,19 @@ $body = @{
 
 Invoke-RestMethod -Uri "http://localhost:5001/predict" -Method POST -ContentType "application/json" -Body $body
 
+## test APT example 2
+$body = @{
+    data = @(
+        @{
+            sepal_length = 5.1
+            sepal_width  = 3.5
+            petal_length = 1.4
+            petal_width  = 0.2
+        }
+    )
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Uri "http://127.0.0.1:5001/predict" -Method POST -ContentType "application/json" -Body $body
 
 # Stop all running containers
 docker stop $(docker ps -q)
@@ -123,3 +136,15 @@ aws s3 mb s3://mybucket --endpoint-url=http://localhost:4566
 aws s3 ls --endpoint-url=http://localhost:4566
 
 ## using LocalStack, you do not need to set SSH_KNOWN_HOSTS or EC2_IP for your local development and CI/CD with LocalStack.
+
+
+###################
+#### Part 5 ######
+##################
+
+pip install flask sqlite3
+
+
+git add .
+git commit -m "Test CI/CD pipeline"
+git push
