@@ -8,12 +8,20 @@ import numpy as np
 import logging
 import sqlite3
 from datetime import datetime
+from prometheus_flask_exporter import PrometheusMetrics
+from prometheus_client import Counter
 
 # Initialize Flask app
 app = Flask(__name__)
 
 # Load model
 model = joblib.load(os.getenv('MODEL_PATH', 'models/iris_rf_model.joblib'))
+
+metrics = PrometheusMetrics(app)
+
+# Prometheus custom counters
+prediction_counter = Counter('iris_predictions_total', 'Total prediction requests')
+# error_counter = Counter('iris_prediction_errors_total', 'Total prediction errors')
 
 # Pydantic models for validation
 class IrisFeatures(BaseModel):
@@ -57,6 +65,8 @@ def log_to_db(input_data, prediction):
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
+        prediction_counter.inc()  # Increment Prometheus prediction counter
+
         # Validate input
         request_data = request.get_json()
         if not request_data:
@@ -66,15 +76,19 @@ def predict():
         
         # Convert to DataFrame with correct feature names
         input_data = pd.DataFrame([
-            {
-                'sepal length (cm)': item.sepal_length,
-                'sepal width (cm)': item.sepal_width,
-                'petal length (cm)': item.petal_length,
-                'petal width (cm)': item.petal_width
+              {
+                'sepal_length': item.sepal_length,
+                'sepal_width': item.sepal_width,
+                'petal_length': item.petal_length,
+                'petal_width': item.petal_width
             }
             for item in validated_data.data
         ])
         
+        
+        # Reorder columns to match training
+        input_data = input_data[['sepal_length', 'sepal_width', 'petal_length', 'petal_width']]
+
         # Make prediction
         predictions = model.predict(input_data).tolist()
         class_names = ['setosa', 'versicolor', 'virginica']
@@ -98,11 +112,7 @@ def predict():
             'message': str(e)
         }), 400
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'healthy'})
-
-# Optional: /metrics endpoint
+#  /metrics endpoint
 @app.route('/metrics', methods=['GET'])
 def metrics():
     conn = sqlite3.connect('logs.db')
@@ -112,5 +122,37 @@ def metrics():
     conn.close()
     return jsonify({'total_predictions': count})
 
+@app.route('/retrain', methods=['POST'])
+def retrain():
+    try:
+        # Assume new data is sent as a JSON payload
+        new_data = request.get_json()
+        if not new_data or 'data' not in new_data:
+            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+
+        # Convert to DataFrame
+        df = pd.DataFrame(new_data['data'])
+        if 'target' not in df.columns:
+            return jsonify({'status': 'error', 'message': 'Target column missing'}), 400
+
+        X = df[['sepal_length', 'sepal_width', 'petal_length', 'petal_width']]
+        y = df['target']
+
+        # Retrain model (RandomForest example)
+        from sklearn.ensemble import RandomForestClassifier
+        new_model = RandomForestClassifier()
+        new_model.fit(X, y)
+
+        # Save new model
+        joblib.dump(new_model, 'models/iris_rf_model.joblib')
+        
+        # Reload the model in memory
+        global model
+        model = joblib.load('models/iris_rf_model.joblib')
+
+        return jsonify({'status': 'success', 'message': 'Model retrained and saved.'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5001)

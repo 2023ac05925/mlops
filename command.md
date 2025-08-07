@@ -148,3 +148,45 @@ pip install flask sqlite3
 git add .
 git commit -m "Test CI/CD pipeline"
 git push
+
+## How to start prometheus
+## start prometheus
+.\prometheus.exe --config.file=prometheus.yml
+## Go to http://localhost:9090 in your browser.
+
+
+
+## Retrain Model
+$body = @{
+    data = @(
+        @{
+            sepal_length = 5.1
+            sepal_width  = 3.5
+            petal_length = 1.4
+            petal_width  = 0.2
+            target       = 0
+        },
+        @{
+            sepal_length = 6.7
+            sepal_width  = 3.0
+            petal_length = 5.2
+            petal_width  = 2.3
+            target       = 2
+        }
+    )
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Uri "http://127.0.0.1:5001/retrain" -Method POST -ContentType "application/json" -Body $body
+## predict for new data
+$body = @{
+    data = @(
+        @{
+            sepal_length = 5.1
+            sepal_width  = 3.5
+            petal_length = 1.4
+            petal_width  = 0.2
+        }
+    )
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Uri "http://127.0.0.1:5001/predict" -Method POST -ContentType "application/json" -Body $body
