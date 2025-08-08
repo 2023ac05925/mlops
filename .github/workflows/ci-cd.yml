@@ -1,79 +1,325 @@
-name: CI/CD Pipeline
+---
+name: MLOps Complete Pipeline - Iris Classification
+version: "1.0.0"
+description: "End-to-end MLOps pipeline from data preparation to deployment"
 
-on:
-  push:
-    branches: [ "**" ]  # Triggers on all branches (adjust if needed)
-  pull_request:
-    branches: [ "phase1" ]  # Triggers on PRs to phase1
+# Environment Configuration
+environment:
+  python_version: "3.11"
+  working_directory: "."
+  requirements_file: "requirements.txt"
 
-jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4  # Updated to latest version
+# Pipeline Stages Configuration
+pipeline_stages:
+  
+  # Stage 1: Environment Setup
+  stage_1_setup:
+    name: "Environment Setup & Dependencies"
+    description: "Install dependencies and setup environment"
+    commands:
+      - "pip install -r requirements.txt"
+      - "pip install flask sqlite3"
+    environment_fixes:
+      dvc_path_fix:
+        check: "python -m pip show dvc | findstr 'Location'"
+        windows_fix: "$env:Path += ';C:\\Users\\SRI\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\Scripts'"
 
-      # REMOVE these Node.js and npm steps if not needed
-      # - name: Set up Node.js
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: '20'
+  # Stage 2: Data Processing & DVC
+  stage_2_data_preparation:
+    name: "Data Preparation & Version Control"
+    description: "Process data and setup DVC tracking"
+    commands:
+      - "python src/data_processing.py"
+      - "python -m dvc init"
+      - "python -m dvc add data/raw/iris.csv"
+      - "mkdir ../dvc-storage"
+      - "python -m dvc remote add -d storage ../dvc-storage"
+      - "python -m dvc push"
+      - "dvc commit -f"
+      - "dvc push"
+    outputs:
+      - "data/processed/"
+      - "../dvc-storage/"
 
-      # - name: Install dependencies
-      #   run: npm ci
+  # Stage 3: Model Training & MLflow
+  stage_3_model_training:
+    name: "Model Training & Experiment Tracking"
+    description: "Train models and track with MLflow"
+    commands:
+      - "python src/data_preparation.py"
+      - "python src/model_training.py"
+      - "python src/train_model.py"
+    mlflow:
+      start_ui: "mlflow ui"
+      fallback_ui: "python -m mlflow ui"
+      tracking_uri: "http://localhost:5000"
+    dvc_tracking:
+      - "dvc add models/iris_rf_model.joblib"
+      - "git add models/.gitignore models/iris_rf_model.joblib.dvc"
+    outputs:
+      - "models/iris_rf_model.joblib"
+      - "mlruns/"
 
-      # - name: Run linter
-      #   run: npm run lint
+  # Stage 4: Containerization
+  stage_4_containerization:
+    name: "Docker Build & Container Management"
+    description: "Build and run Docker containers"
+    docker:
+      build:
+        command: "docker build -t iris-api ."
+        image_name: "iris-api"
+      run_options:
+        - "docker run -p 5001:5001 iris-api"
+        - "docker run -p 5001:5001 --add-host=host.docker.internal:host-gateway iris-api"
+      management:
+        list_containers: "docker ps -a"
+        stop_all: "docker stop $(docker ps -q)"
+        stop_specific: "docker stop <container_id_or_name>"
+        force_remove: "docker rm -f <container_id_or_name>"
 
-      # - name: Run tests
-      #   run: npm run test
+  # Stage 5: Infrastructure Setup (LocalStack)
+  stage_5_infrastructure:
+    name: "Infrastructure as Code - LocalStack"
+    description: "Setup LocalStack for AWS emulation"
+    ssh_setup:
+      command: "ssh-keygen -t rsa -b 4096 -C '2023ac05925@wilp.bits-pilani.ac.in'"
+    docker_login:
+      command: "docker login"
+    localstack:
+      start_command: "docker run -d -p 4566:4566 -p 4571:4571 localstack/localstack"
+      ports:
+        - "4566:4566"
+        - "4571:4571"
+      endpoint_url: "http://localhost:4566"
+    aws_configuration:
+      check_version: "aws --version"
+      configure: "aws configure"
+      credentials:
+        access_key_id: "test"
+        secret_access_key: "test"
+        region: "us-east-1"
+        output_format: "json"
+      test_commands:
+        - "aws s3 ls --endpoint-url=http://localhost:4566"
+        - "aws s3 mb s3://mybucket --endpoint-url=http://localhost:4566"
+        - "aws s3 ls --endpoint-url=http://localhost:4566"
 
-  build-and-push:
-    needs: lint-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/phase1'  # Only run on phase1 branch
+  # Stage 6: Monitoring Setup
+  stage_6_monitoring:
+    name: "Monitoring & Observability"
+    description: "Setup Prometheus monitoring"
+    prometheus:
+      start_command: ".\\prometheus.exe --config.file=prometheus.yml"
+      config_file: "prometheus.yml"
+      dashboard_url: "http://localhost:9090"
+      port: 9090
 
-    steps:
-      - uses: actions/checkout@v4
+  # Stage 7: CI/CD Integration
+  stage_7_cicd:
+    name: "CI/CD Pipeline Integration"
+    description: "Git operations and pipeline triggers"
+    git_operations:
+      - "git add ."
+      - "git commit -m 'Initial implementation with Iris dataset'"
+      - "git add ."
+      - "git commit -m 'Test CI/CD pipeline'"
+      - "git push"
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3  # Updated to v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+  # Stage 8: API Testing & Validation
+  stage_8_testing:
+    name: "API Testing & Validation"
+    description: "Test prediction and retraining endpoints"
+    api_base_url: "http://127.0.0.1:5001"
+    endpoints:
+      predict: "/predict"
+      retrain: "/retrain"
+      health: "/health"
+      metrics: "/metrics"
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5  # Updated to v5
-        with:
-          context: .
-          push: true
-          tags: |
-            2023ac05925/iris-api:latest
-            2023ac05925/iris-api:${{ github.sha }}
+  # Stage 9: Model Retraining
+  stage_9_retraining:
+    name: "Model Retraining Pipeline"
+    description: "Retrain model with new data"
+    trigger_endpoint: "http://127.0.0.1:5001/retrain"
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/phase1'
+  # Stage 10: Production Deployment
+  stage_10_deployment:
+    name: "Production Deployment"
+    description: "Deploy to production environment"
+    deployment_target: "localstack"
 
-    steps:
-      - uses: actions/checkout@v4
+# API Testing Scripts
+api_testing:
+  prediction_tests:
+    test_1:
+      description: "Multiple samples prediction test"
+      endpoint: "http://localhost:5001/predict"
+      method: "POST"
+      content_type: "application/json"
+      body: |
+        {
+          "data": [
+            {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2},
+            {"sepal_length": 6.7, "sepal_width": 3.0, "petal_length": 5.2, "petal_width": 2.3}
+          ]
+        }
+    
+    test_2:
+      description: "Single sample prediction test"
+      endpoint: "http://127.0.0.1:5001/predict"
+      method: "POST"
+      content_type: "application/json"
+      body: |
+        {
+          "data": [
+            {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}
+          ]
+        }
 
-      - name: Start LocalStack (if not already running)
-        run: |
-          docker network create localstack || true
-          docker run -d --name localstack_main --network localstack -p 4566:4566 -e SERVICES=ec2,s3,lambda localstack/localstack
+  retraining_test:
+    description: "Model retraining with new data"
+    endpoint: "http://127.0.0.1:5001/retrain"
+    method: "POST"
+    content_type: "application/json"
+    body: |
+      {
+        "data": [
+          {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2, "target": 0},
+          {"sepal_length": 6.7, "sepal_width": 3.0, "petal_length": 5.2, "petal_width": 2.3, "target": 2}
+        ]
+      }
 
-      - name: Configure AWS CLI for LocalStack
-        run: |
-          aws configure set aws_access_key_id test
-          aws configure set aws_secret_access_key test
-          aws configure set default.region us-east-1
-          aws configure set endpoint_url http://localhost:4566
+# PowerShell Scripts for Windows
+powershell_scripts:
+  prediction_test: |
+    $body = @{
+        data = @(
+            @{
+                sepal_length = 5.1
+                sepal_width  = 3.5
+                petal_length = 1.4
+                petal_width  = 0.2
+            }
+        )
+    } | ConvertTo-Json -Depth 5
+    
+    Invoke-RestMethod -Uri "http://127.0.0.1:5001/predict" -Method POST -ContentType "application/json" -Body $body
 
-      - name: Deploy to LocalStack
-        run: |
-          aws s3 mb s3://mybucket --endpoint-url=http://localhost:4566
+  retraining_test: |
+    $body = @{
+        data = @(
+            @{
+                sepal_length = 5.1
+                sepal_width  = 3.5
+                petal_length = 1.4
+                petal_width  = 0.2
+                target       = 0
+            },
+            @{
+                sepal_length = 6.7
+                sepal_width  = 3.0
+                petal_length = 5.2
+                petal_width  = 2.3
+                target       = 2
+            }
+        )
+    } | ConvertTo-Json -Depth 5
+    
+    Invoke-RestMethod -Uri "http://127.0.0.1:5001/retrain" -Method POST -ContentType "application/json" -Body $body
 
-      - name: Run Dockerized App (Connects to LocalStack)
-        run: |
-          docker run -d --name my-app --network localstack -e AWS_ENDPOINT=http://localstack:4566 -p 5001:5001 ${{ secrets.DOCKER_HUB_USERNAME }}/iris-api:latest
+  multiple_samples_test: |
+    $body = @{
+        data = @(
+            @{sepal_length=5.1; sepal_width=3.5; petal_length=1.4; petal_width=0.2},
+            @{sepal_length=6.7; sepal_width=3.0; petal_length=5.2; petal_width=2.3}
+        )
+    } | ConvertTo-Json -Depth 5
+    
+    Invoke-RestMethod -Uri "http://localhost:5001/predict" -Method POST -ContentType "application/json" -Body $body
+
+# Process Management
+process_management:
+  find_port_process: |
+    $pid = (Get-NetTCPConnection -LocalPort 5001).OwningProcess
+  stop_process: |
+    Stop-Process -Id $pid -Force
+
+# Docker Management
+docker_management:
+  commands:
+    list_all: "docker ps -a"
+    stop_all: "docker stop $(docker ps -q)"
+    stop_specific: "docker stop <container_id_or_name>"
+    force_remove: "docker rm -f <container_id_or_name>"
+
+# File Structure
+project_structure:
+  src:
+    - "data_processing.py"
+    - "data_preparation.py"
+    - "model_training.py"
+    - "train_model.py"
+    - "app.py"
+  data:
+    - "raw/iris.csv"
+    - "processed/"
+  models:
+    - "iris_rf_model.joblib"
+  prometheus:
+    - "prometheus.exe"
+    - "prometheus.yml"
+  docker:
+    - "Dockerfile"
+  github:
+    - ".github/workflows/ci-cd.yml"
+
+# Environment Variables
+environment_variables:
+  PYTHON_PATH: "C:\\Users\\SRI\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\Scripts"
+  AWS_ENDPOINT_URL: "http://localhost:4566"
+  MLFLOW_TRACKING_URI: "http://localhost:5000"
+  PROMETHEUS_CONFIG: "prometheus.yml"
+  API_PORT: "5001"
+  PROMETHEUS_PORT: "9090"
+  LOCALSTACK_PORTS: "4566:4566,4571:4571"
+
+# Troubleshooting
+troubleshooting:
+  dvc_issues:
+    check_location: "python -m pip show dvc | findstr 'Location'"
+    path_fix: "$env:Path += ';C:\\Users\\SRI\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\Scripts'"
+  
+  mlflow_issues:
+    fallback_command: "python -m mlflow ui"
+  
+  port_conflicts:
+    find_process: "$pid = (Get-NetTCPConnection -LocalPort 5001).OwningProcess"
+    kill_process: "Stop-Process -Id $pid -Force"
+  
+  docker_issues:
+    host_gateway: "--add-host=host.docker.internal:host-gateway"
+    network_mode: "--network host"
+
+# Pipeline Execution Order
+execution_order:
+  - "stage_1_setup"
+  - "stage_2_data_preparation"
+  - "stage_3_model_training"
+  - "stage_4_containerization"
+  - "stage_5_infrastructure"
+  - "stage_6_monitoring"
+  - "stage_7_cicd"
+  - "stage_8_testing"
+  - "stage_9_retraining"
+  - "stage_10_deployment"
+
+# Success Criteria
+success_criteria:
+  data_preparation: "DVC repository initialized and data tracked"
+  model_training: "Model artifact saved and tracked in MLflow"
+  containerization: "Docker image built and running on port 5001"
+  infrastructure: "LocalStack running and S3 bucket created"
+  monitoring: "Prometheus dashboard accessible on port 9090"
+  api_testing: "Prediction endpoint returns valid responses"
+  retraining: "Model successfully retrained with new data"
+  deployment: "All services running and interconnected"

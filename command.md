@@ -18,7 +18,7 @@ mkdir ../dvc-storage  ## local dvc storage folder
 python -m dvc remote add -d storage ../dvc-storage
 python -m dvc push
 
-# Track data with DVC
+## Track data with DVC
 dvc commit -f  # Only needed if you modified data processing
 dvc push       # Push data to remote storage
 
