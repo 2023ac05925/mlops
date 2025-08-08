@@ -305,7 +305,53 @@ jobs:
           sleep 1
         done
 
-  # Stage 8: Deploy to Production
+  # Stage 8: Linting and Testing
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # Updated to latest version
+
+      # REMOVE these Node.js and npm steps if not needed
+      # - name: Set up Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+
+      # - name: Install dependencies
+      #   run: npm ci
+
+      # - name: Run linter
+      #   run: npm run lint
+
+      # - name: Run tests
+      #   run: npm run test
+
+# Stage 9: Build and Push Docker Image
+  build-and-push:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/phase1'  # Only run on phase1 branch
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3  # Updated to v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5  # Updated to v5
+        with:
+          context: .
+          push: true
+          tags: |
+            2023ac05925/iris-api:latest
+            2023ac05925/iris-api:${{ github.sha }}
+
+  
+  # Stage 10: Deploy to Production
   deployment:
     runs-on: ubuntu-latest
     needs: [api-testing, infrastructure]
@@ -361,7 +407,7 @@ jobs:
         echo "🚀 API Endpoint: http://localhost:5001"
         echo "🎯 Production API: http://localhost:5002"
 
-  # Stage 9: Pipeline Summary
+  # Stage 11: Pipeline Summary
   summary:
     runs-on: ubuntu-latest
     needs: [deployment]
@@ -370,24 +416,24 @@ jobs:
     - name: Pipeline Summary
       run: |
         echo "=================================="
-        echo "🎯 MLOps Pipeline Summary"
+        echo " MLOps Pipeline Summary"
         echo "=================================="
-        echo "✅ Environment Setup: Completed"
-        echo "✅ Data Preparation & DVC: Completed"
-        echo "✅ Model Training: Completed"
-        echo "✅ Containerization: Completed"
-        echo "✅ Infrastructure (LocalStack): Completed"
-        echo "✅ Monitoring (Prometheus): Completed"
-        echo "✅ API Testing & Model Ops: Completed"
-        echo "✅ Production Deployment: Completed"
+        echo "Environment Setup: Completed"
+        echo "Data Preparation & DVC: Completed"
+        echo "Model Training: Completed"
+        echo "Containerization: Completed"
+        echo "Infrastructure (LocalStack): Completed"
+        echo "Monitoring (Prometheus): Completed"
+        echo "API Testing & Model Ops: Completed"
+        echo "Production Deployment: Completed"
         echo ""
-        echo "🔗 Access Points:"
-        echo "📊 Prometheus: http://localhost:9090"
-        echo "🚀 API: http://localhost:5001"
-        echo "🎯 Production: http://localhost:5002"
-        echo "☁️  LocalStack: http://localhost:4566"
+        echo "Access Points:"
+        echo "Prometheus: http://localhost:9090"
+        echo "API: http://localhost:5001"
+        echo "Production: http://localhost:5002"
+        echo "LocalStack: http://localhost:4566"
         echo ""
-        echo "🧪 Tested Operations:"
+        echo "Tested Operations:"
         echo "• Health checks"
         echo "• Single & multiple predictions"
         echo "• Model retraining"
