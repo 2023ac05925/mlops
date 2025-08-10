@@ -161,14 +161,16 @@ jobs:
         run: |
           docker run -d --name iris-test -p 5001:5001 iris-api
           sleep 30
+          docker logs iris-test
+          docker ps -a
       - name: Predict via PowerShell (two samples)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $body = @{
               data = @(
-                  @{ sepal_length=5.1; sepal_width=3.5; petal_length=1.4; petal_width=0.2 },
-                  @{ sepal_length=6.7; sepal_width=3.0; petal_length=5.2; petal_width=2.3 }
+                  @{ 'sepal length (cm)'=5.1; 'sepal width (cm)'=3.5; 'petal length (cm)'=1.4; 'petal width (cm)'=0.2 },
+                  @{ 'sepal length (cm)'=6.7; 'sepal width (cm)'=3.0; 'petal length (cm)'=5.2; 'petal width (cm)'=2.3 }
               )
           } | ConvertTo-Json -Depth 5
           $resp = Invoke-RestMethod -Uri "http://localhost:5001/predict" -Method POST -ContentType "application/json" -Body $body
