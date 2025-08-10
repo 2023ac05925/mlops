@@ -104,7 +104,24 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt || echo "requirements.txt not found"
-        pip install scikit-learn pandas numpy joblib || echo "Failed to install packages"
+        pip install mlflow scikit-learn pandas numpy joblib || echo "Failed to install packages"
+    - name: Start MLflow server (Docker)
+      run: |
+        mkdir -p mlruns
+        docker run -d --name mlflow \
+          -p 5000:5000 \
+          -v "$PWD/mlruns:/mlflow/artifacts" \
+          -v "$PWD/mlflow.db:/mlflow/mlflow.db" \
+          ghcr.io/mlflow/mlflow:v2.14.1 \
+          mlflow server \
+            --backend-store-uri sqlite:///mlflow.db \
+            --default-artifact-root /mlflow/artifacts \
+            --host 0.0.0.0 --port 5000
+        # wait for MLflow UI to be ready
+        for i in {1..30}; do
+          if curl -fsS http://127.0.0.1:5000 > /dev/null; then echo "MLflow up"; break; fi
+          sleep 2
+        done
     - name: Create models directory
       run: |
         mkdir -p models
@@ -119,6 +136,15 @@ jobs:
         name: trained-model
         path: models/
         retention-days: 30
+    - name: Upload MLflow runs (artifacts + DB)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlflow-tracking
+        path: |
+          mlruns/
+          mlflow.db
+        retention-days: 14
 
   # Stage 5: Containerization
   containerization:
@@ -151,11 +177,22 @@ jobs:
       run: |
         docker run -d --name iris-test -p 5001:5001 iris-api
         sleep 30
-        curl -f http://localhost:5001/health || echo "Health check failed"
-        docker stop iris-test || echo "Already stopped"
-        docker rm iris-test || echo "Already removed"
+    
+    - name: Predict via PowerShell (two samples)
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $body = @{
+            data = @(
+                @{ sepal_length=5.1; sepal_width=3.5; petal_length=1.4; petal_width=0.2 },
+                @{ sepal_length=6.7; sepal_width=3.0; petal_length=5.2; petal_width=2.3 }
+            )
+        } | ConvertTo-Json -Depth 5
+        $resp = Invoke-RestMethod -Uri "http://localhost:5001/predict" -Method POST -ContentType "application/json" -Body $body
+        $resp | ConvertTo-Json -Depth 5 | Write-Output
+   
 
-  # Stage 6: Build and Push to Registry (MOVED HERE)
+  # Stage 6: Build and Push to Registry
   build-and-push:
     runs-on: ubuntu-latest
     needs: containerization
@@ -185,25 +222,64 @@ jobs:
   infrastructure:
     runs-on: ubuntu-latest
     needs: build-and-push
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localhost:4566
+      BUCKET: iris-${{ github.run_id }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Install AWS CLI
-      run: |
-        pip install awscli
-    - name: Configure AWS CLI
-      run: |
-        aws configure set aws_access_key_id test
-        aws configure set aws_secret_access_key test
-        aws configure set default.region us-east-1
-        aws configure set default.output json
-    - name: Start LocalStack
-      run: |
-        docker run -d --name localstack -p 4566:4566 -p 4571:4571 localstack/localstack
-        sleep 30
-    - name: Test LocalStack
-      run: |
-        aws s3 mb s3://test-bucket --endpoint-url=http://localhost:4566 || echo "Bucket creation failed"
-        aws s3 ls --endpoint-url=http://localhost:4566
+      - uses: actions/checkout@v4
+
+      - name: Install AWS CLI
+        run: pip install awscli
+
+      - name: Start LocalStack (S3)
+        run: |
+          docker run -d --name localstack -p 4566:4566 -p 4571:4571 localstack/localstack
+          # wait until ready
+          for i in {1..40}; do
+            if curl -fsS ${AWS_ENDPOINT_URL}/_localstack/health >/dev/null; then break; fi
+            sleep 2
+          done
+
+      - name: Create bucket and list buckets
+        run: |
+          aws s3 mb s3://$BUCKET --endpoint-url $AWS_ENDPOINT_URL
+          echo "Buckets:"
+          aws s3 ls --endpoint-url $AWS_ENDPOINT_URL | tee s3_buckets.txt
+          # Also JSON view
+          aws s3api list-buckets --endpoint-url $AWS_ENDPOINT_URL --output json | tee s3_buckets.json
+          {
+            echo "### LocalStack S3 buckets"
+            aws s3 ls --endpoint-url $AWS_ENDPOINT_URL
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload a test object and list objects
+        run: |
+          echo "hello" > hello.txt
+          aws s3 cp hello.txt s3://$BUCKET/demo/ --endpoint-url $AWS_ENDPOINT_URL
+          echo "Objects in s3://$BUCKET:"
+          aws s3 ls s3://$BUCKET --recursive --human-readable --summarize --endpoint-url $AWS_ENDPOINT_URL | tee s3_objects.txt
+          {
+            echo ""
+            echo "### Objects in s3://$BUCKET"
+            aws s3 ls s3://$BUCKET --recursive --endpoint-url $AWS_ENDPOINT_URL
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload S3 listings as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: localstack-s3-listings
+          path: |
+            s3_buckets.txt
+            s3_buckets.json
+            s3_objects.txt
+
+      - name: Teardown LocalStack
+        if: always()
+        run: docker rm -f localstack || true
+
 
   # Stage 8: Monitoring Setup
   monitoring-setup:
@@ -245,55 +321,141 @@ jobs:
   # Stage 9: API Testing & Model Operations
   api-testing:
     runs-on: ubuntu-latest
-    needs: [build-and-push, monitoring-setup]
+    needs: [build-and-push]
     steps:
-    - uses: actions/checkout@v4
-    - name: Download model artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: trained-model
-        path: models/
-    - name: Start API with Prometheus metrics
-      run: |
-        docker run -d --name iris-api -p 5001:5001 2023ac05925/iris-api:latest
-        sleep 30
-    - name: Test Health Endpoint
-      run: |
-        curl -f http://localhost:5001/health || echo "Health check failed"
-    - name: Test Metrics Endpoint
-      run: |
-        curl -f http://localhost:5001/metrics || echo "Metrics endpoint failed"
-    - name: Test Prediction Endpoint - Single Sample
-      run: |
-        curl -X POST http://localhost:5001/predict \
-          -H "Content-Type: application/json" \
-          -d '{
-            "data": [
-              {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}
-            ]
-          }' || echo "Single prediction test failed"
-    - name: Test Model Retraining Endpoint
-      run: |
-        curl -X POST http://localhost:5001/retrain \
-          -H "Content-Type: application/json" \
-          -d '{
-            "data": [
-              {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2, "target": 0},
-              {"sepal_length": 6.7, "sepal_width": 3.0, "petal_length": 5.2, "petal_width": 2.3, "target": 2}
-            ]
-          }' || echo "Retraining test failed"
-    - name: Test Prediction After Retraining
-      run: |
-        sleep 10
-        curl -X POST http://localhost:5001/predict \
-          -H "Content-Type: application/json" \
-          -d '{
-            "data": [
-              {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}
-            ]
-          }' || echo "Post-retraining prediction test failed"
+      - uses: actions/checkout@v4
 
-  # Stage 10: Deploy to Production
+      - name: Start API
+        run: |
+          docker run -d --name iris-api -p 5001:5001 2023ac05925/iris-api:latest
+          # wait for health or metrics to respond
+          for i in {1..30}; do
+            curl -fsS http://localhost:5001/health && break || true
+            curl -fsS http://localhost:5001/metrics && break || true
+            sleep 2
+          done
+
+      - name: Start Prometheus (Docker) with data volume + admin API
+        run: |
+          cat > prometheus.yml << 'EOF'
+          global:
+            scrape_interval: 5s
+          scrape_configs:
+            - job_name: 'iris-api'
+              static_configs:
+                - targets: ['localhost:5001']
+              metrics_path: /metrics
+          EOF
+          mkdir -p prom_data
+          docker run -d --name prom -p 9090:9090 \
+            -v $PWD/prometheus.yml:/etc/prometheus/prometheus.yml \
+            -v $PWD/prom_data:/prometheus \
+            prom/prometheus:v2.47.1 \
+            --config.file=/etc/prometheus/prometheus.yml \
+            --storage.tsdb.path=/prometheus \
+            --web.enable-admin-api
+          # wait until Prometheus is up
+          for i in {1..20}; do curl -fsS http://localhost:9090/-/ready && break || sleep 2; done
+
+      - name: Retrain via PowerShell (two samples with targets)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $body = @{
+              data = @(
+                  @{
+                      sepal_length = 5.1
+                      sepal_width  = 3.5
+                      petal_length = 1.4
+                      petal_width  = 0.2
+                      target       = 0
+                  },
+                  @{
+                      sepal_length = 6.7
+                      sepal_width  = 3.0
+                      petal_length = 5.2
+                      petal_width  = 2.3
+                      target       = 2
+                  }
+              )
+          } | ConvertTo-Json -Depth 5
+
+          $resp = Invoke-RestMethod -Uri "http://localhost:5001/retrain" -Method POST -ContentType "application/json" -Body $body
+          $json = $resp | ConvertTo-Json -Depth 5
+          New-Item -ItemType Directory -Force -Path results | Out-Null
+          $json | Out-File -FilePath results/retrain_response.json -Encoding utf8
+          @"
+### Retrain response
+$json
+"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Predict after retrain (PowerShell)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $body = @{
+              data = @(
+                  @{
+                      sepal_length = 5.1
+                      sepal_width  = 3.5
+                      petal_length = 1.4
+                      petal_width  = 0.2
+                  },
+                  @{
+                      sepal_length = 6.7
+                      sepal_width  = 3.0
+                      petal_length = 5.2
+                      petal_width  = 2.3
+                  }
+              )
+          } | ConvertTo-Json -Depth 5
+
+          $resp = Invoke-RestMethod -Uri "http://localhost:5001/predict" -Method POST -ContentType "application/json" -Body $body
+          $json = $resp | ConvertTo-Json -Depth 5
+          $json | Out-File -FilePath results/prediction_after_retrain.json -Encoding utf8
+          @"
+### Prediction after retrain
+$json
+"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Query Prometheus for /predict traffic (last 5m)
+        run: |
+          # give Prometheus a moment to scrape after requests
+          sleep 5
+          Q='sum(increase(flask_http_request_total{path="/predict",status="200"}[5m]))'
+          curl -fsS --get http://localhost:9090/api/v1/query --data-urlencode "query=$Q" | tee prom_query.json
+          echo "### Prometheus /predict count (5m window)" >> $GITHUB_STEP_SUMMARY
+          cat prom_query.json >> $GITHUB_STEP_SUMMARY
+
+      - name: Snapshot Prometheus TSDB and upload
+        run: |
+          curl -fsS -X POST "http://localhost:9090/api/v1/admin/tsdb/snapshot?skip_head=false" | tee snapshot.json
+          SNAP=$(grep -oP '"name"\s*:\s*"\K[^"]+' snapshot.json || true)
+          echo "Snapshot name: $SNAP"
+          if [ -n "$SNAP" ] && [ -d "prom_data/snapshots/$SNAP" ]; then
+            tar -C prom_data/snapshots -czf prom-snapshot.tgz "$SNAP"
+          else
+            tar -C prom_data -czf prom-snapshot.tgz .
+          fi
+      - name: Upload API test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-testing-results
+          path: |
+            results/retrain_response.json
+            results/prediction_after_retrain.json
+            prom_query.json
+            snapshot.json
+            prom-snapshot.tgz
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker rm -f prom || true
+          docker rm -f iris-api || true
+
+
+ # Stage 10: Deploy to Production
   deployment:
     runs-on: ubuntu-latest
     needs: [api-testing]

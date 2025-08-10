@@ -52,7 +52,8 @@ Mlflow ui
 ###################
 ## 1. Build the Docker image:
 docker build -t iris-api .
-
+## to clear catch and build fresh 
+docker build --no-cache -t iris-api .
 
 ## 2. Run the container (make sure MLflow is running):
 docker run -p 5001:5001 iris-api
@@ -151,7 +152,7 @@ git push
 
 ## How to start prometheus
 ## start prometheus
-.\prometheus.exe --config.file=prometheus.yml
+.\prometheus\prometheus.exe --config.file=prometheus.yml
 ## Go to http://localhost:9090 in your browser.
 
 
@@ -190,3 +191,9 @@ $body = @{
 } | ConvertTo-Json -Depth 5
 
 Invoke-RestMethod -Uri "http://127.0.0.1:5001/predict" -Method POST -ContentType "application/json" -Body $body
+
+
+
+git add .
+git commit -m "Test CI/CD pipeline"
+git push
