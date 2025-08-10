@@ -26,3 +26,14 @@ prometheus/LICENSE
 prometheus/data
 prometheus/prometheus.exe
 prometheus/promtool.exe
+
+# Prometheus TSDB
+data/
+prom_data/
+
+# MLflow artifacts
+mlruns/
+mlflow.db
+
+# CI artifacts
+prom-snapshot.tgz

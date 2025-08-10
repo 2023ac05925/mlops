@@ -357,6 +357,7 @@ jobs:
           # wait until Prometheus is up
           for i in {1..20}; do curl -fsS http://localhost:9090/-/ready && break || sleep 2; done
 
+
       - name: Retrain via PowerShell (two samples with targets)
         shell: pwsh
         run: |
@@ -384,7 +385,8 @@ jobs:
           $json = $resp | ConvertTo-Json -Depth 5
           New-Item -ItemType Directory -Force -Path results | Out-Null
           $json | Out-File -FilePath results/retrain_response.json -Encoding utf8
-          @"
+          "### Retrain response" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          $json | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 ### Retrain response
 $json
 "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
@@ -420,7 +422,7 @@ $json
 
       - name: Query Prometheus for /predict traffic (last 5m)
         run: |
-          # give Prometheus a moment to scrape after requests
+          echo "Querying Prometheus for /predict traffic..."
           sleep 5
           Q='sum(increase(flask_http_request_total{path="/predict",status="200"}[5m]))'
           curl -fsS --get http://localhost:9090/api/v1/query --data-urlencode "query=$Q" | tee prom_query.json
