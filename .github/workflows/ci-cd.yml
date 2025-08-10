@@ -387,9 +387,9 @@ jobs:
           $json | Out-File -FilePath results/retrain_response.json -Encoding utf8
           "### Retrain response" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           $json | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-### Retrain response
-$json
-"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "### Retrain response"
+          $json
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Predict after retrain (PowerShell)
         shell: pwsh
@@ -416,9 +416,9 @@ $json
           $json = $resp | ConvertTo-Json -Depth 5
           $json | Out-File -FilePath results/prediction_after_retrain.json -Encoding utf8
           @"
-### Prediction after retrain
-$json
-"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          ### Prediction after retrain
+          $json
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Query Prometheus for /predict traffic (last 5m)
         run: |
