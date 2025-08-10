@@ -260,7 +260,7 @@ jobs:
   # Stage 8: API Testing & Model Operations (no Prometheus)
   api-testing:
     runs-on: ubuntu-latest
-    needs: [build-and-push]
+    needs: [infrastructure]
     steps:
       - uses: actions/checkout@v4
       - name: Start API
@@ -375,4 +375,3 @@ jobs:
           echo "API Testing & Model Ops: Completed"
           echo "Production Deployment: Completed"
           echo "=================================="
-          
