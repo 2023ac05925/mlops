@@ -157,19 +157,7 @@ jobs:
       with:
         name: trained-model
         path: models/
-    - name: Create Dockerfile if missing
-      run: |
-        if [ ! -f Dockerfile ]; then
-          cat > Dockerfile <<'EOF'
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt || pip install flask scikit-learn pandas numpy joblib prometheus-client
-COPY . .
-EXPOSE 5001
-CMD ["python", "src/app.py"]
-EOF
-        fi
+
     - name: Build Docker image
       run: |
         docker build -t iris-api .
