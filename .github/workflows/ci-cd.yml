@@ -160,15 +160,15 @@ jobs:
     - name: Create Dockerfile if missing
       run: |
         if [ ! -f Dockerfile ]; then
-          cat > Dockerfile << 'EOF'
-        FROM python:3.11-slim
-        WORKDIR /app
-        COPY requirements.txt .
-        RUN pip install -r requirements.txt || pip install flask scikit-learn pandas numpy joblib prometheus-client
-        COPY . .
-        EXPOSE 5001
-        CMD ["python", "src/app.py"]
-        EOF
+          cat > Dockerfile <<'EOF'
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt || pip install flask scikit-learn pandas numpy joblib prometheus-client
+COPY . .
+EXPOSE 5001
+CMD ["python", "src/app.py"]
+EOF
         fi
     - name: Build Docker image
       run: |
@@ -297,16 +297,16 @@ jobs:
     - name: Create Prometheus config if missing
       run: |
         if [ ! -f prometheus.yml ]; then
-          cat > prometheus.yml << 'EOF'
-        global:
-          scrape_interval: 15s
-        scrape_configs:
-          - job_name: 'iris-api'
-            static_configs:
-              - targets: ['localhost:5001']
-            metrics_path: '/metrics'
-            scrape_interval: 5s
-        EOF
+          cat > prometheus.yml <<'EOF'
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: 'iris-api'
+    static_configs:
+      - targets: ['localhost:5001']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+EOF
         fi
     - name: Start Prometheus
       run: |
@@ -337,15 +337,15 @@ jobs:
 
       - name: Start Prometheus (Docker) with data volume + admin API
         run: |
-          cat > prometheus.yml << 'EOF'
-          global:
-            scrape_interval: 5s
-          scrape_configs:
-            - job_name: 'iris-api'
-              static_configs:
-                - targets: ['localhost:5001']
-              metrics_path: /metrics
-          EOF
+          cat > prometheus.yml <<'EOF'
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: 'iris-api'
+    static_configs:
+      - targets: ['localhost:5001']
+    metrics_path: /metrics
+EOF
           mkdir -p prom_data
           docker run -d --name prom -p 9090:9090 \
             -v $PWD/prometheus.yml:/etc/prometheus/prometheus.yml \
@@ -354,7 +354,6 @@ jobs:
             --config.file=/etc/prometheus/prometheus.yml \
             --storage.tsdb.path=/prometheus \
             --web.enable-admin-api
-          # wait until Prometheus is up
           for i in {1..20}; do curl -fsS http://localhost:9090/-/ready && break || sleep 2; done
 
 
@@ -387,9 +386,6 @@ jobs:
           $json | Out-File -FilePath results/retrain_response.json -Encoding utf8
           "### Retrain response" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           $json | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          "### Retrain response"
-          $json
-          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Predict after retrain (PowerShell)
         shell: pwsh
@@ -415,10 +411,8 @@ jobs:
           $resp = Invoke-RestMethod -Uri "http://localhost:5001/predict" -Method POST -ContentType "application/json" -Body $body
           $json = $resp | ConvertTo-Json -Depth 5
           $json | Out-File -FilePath results/prediction_after_retrain.json -Encoding utf8
-          @"
-          ### Prediction after retrain
-          $json
-          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "### Prediction after retrain" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          $json | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Query Prometheus for /predict traffic (last 5m)
         run: |
